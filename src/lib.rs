@@ -2,6 +2,8 @@ use chrono::{self, Datelike, Months, NaiveDate, Weekday};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
+    num::ParseIntError,
+    str::FromStr,
 };
 
 pub trait NthDayExtension {
@@ -53,6 +55,23 @@ pub enum Day {
 impl Display for Day {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl FromStr for Day {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Monday" => Ok(Day::Monday),
+            "Tuesday" => Ok(Day::Tuesday),
+            "Wednesday" => Ok(Day::Wednesday),
+            "Thursday" => Ok(Day::Thursday),
+            "Friday" => Ok(Day::Friday),
+            "Saturday" => Ok(Day::Saturday),
+            "Sunday" => Ok(Day::Sunday),
+            _ => Err(format!("{s} is not a valid day")),
+        }
     }
 }
 
@@ -112,12 +131,48 @@ impl Display for Month {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub enum DayOfMonth {
     #[default]
     FirstOfMonth,
-    LastOfMonth,
     NthDay(u32),
+}
+
+const FIRST_OF_MONTH_STR: &str = "first";
+
+impl DayOfMonth {
+    pub fn nth_day(day: u32) -> Result<Self, String> {
+        if day > 28 {
+            Err(format!(
+                "Cannot go between {day}. Highest date is 28th due to Feburary"
+            ))
+        } else {
+            Ok(DayOfMonth::NthDay(day))
+        }
+    }
+}
+
+impl FromStr for DayOfMonth {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            FIRST_OF_MONTH_STR => Ok(DayOfMonth::FirstOfMonth),
+            _ => s
+                .parse()
+                .map_err(|e: ParseIntError| e.to_string())
+                .map(DayOfMonth::nth_day)?,
+        }
+    }
+}
+
+impl Display for DayOfMonth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DayOfMonth::FirstOfMonth => write!(f, "{}", FIRST_OF_MONTH_STR),
+            DayOfMonth::NthDay(num) => write!(f, "{}", num),
+        }
+    }
 }
 
 pub struct MontheyBuilder {
@@ -164,17 +219,12 @@ impl MontheyBuilder {
         Ok(self)
     }
 
-    pub fn for_months(self, months: usize) -> MontheyResult {
+    pub fn for_months(self, months: u32) -> MontheyResult {
         let mut monthey_months = HashMap::new();
 
         fn get_to_date(date: NaiveDate, between_date: &DayOfMonth) -> NaiveDate {
             match between_date {
-                DayOfMonth::FirstOfMonth => date
-                    .checked_add_months(Months::new(1))
-                    .expect("shouldn't be at the end of time")
-                    .with_day(1)
-                    .expect("shouldn't be at the end of time"),
-                DayOfMonth::LastOfMonth => date.last_of_month(),
+                DayOfMonth::FirstOfMonth => date.last_of_month(),
                 DayOfMonth::NthDay(day) => date
                     .checked_add_months(Months::new(1))
                     .expect("shouldn't be at the end of time")
@@ -189,7 +239,6 @@ impl MontheyBuilder {
             DayOfMonth::FirstOfMonth => {
                 self.from_date.with_day(1).expect("1 is always a valid day")
             }
-            DayOfMonth::LastOfMonth => self.from_date.last_of_month(),
             DayOfMonth::NthDay(day) => self
                 .from_date
                 .with_day(day)

@@ -1,21 +1,68 @@
 use std::collections::HashMap;
 
 use chrono::prelude::*;
+use clap::{Arg, ArgAction, Command};
 use iter_tools::Itertools;
-use monthey::{Day, MontheyBuilder, NthDayExtension};
+use monthey::{Day, DayOfMonth, MontheyBuilder};
 use num_traits::FromPrimitive;
 
-fn main() {
-    let result = MontheyBuilder::from_this_month()
-        .check_day(Day::Thursday)
-        .check_day(Day::Saturday)
-        .between_date(10.nth())
-        .unwrap()
-        .for_months(3);
+const COMMAND_NAME: &str = "monthey";
+const MONTHS_ARG: &str = "months";
+const BETWEEN_ARG: &str = "between";
+const DAYS_ARG: &str = "day";
 
-    let display_names: HashMap<_, _> = [
-        (Day::Thursday, "Rent Day"),
-        (Day::Saturday, "Grocery shopping day"),
+fn main() {
+    let matches = Command::new(COMMAND_NAME)
+        .about("calculates given weekday occurrences each month between dates")
+        .args([
+            Arg::new(MONTHS_ARG)
+                .long(MONTHS_ARG)
+                .short('m')
+                .default_value("3")
+                .value_parser(clap::value_parser!(u32)),
+            Arg::new(BETWEEN_ARG)
+                .long(BETWEEN_ARG)
+                .short('b')
+                .default_value("first")
+                .value_parser(clap::value_parser!(DayOfMonth)),
+            Arg::new(DAYS_ARG)
+                .long(DAYS_ARG)
+                .short('d')
+                .action(ArgAction::Append)
+                .required(true)
+                .value_parser(clap::value_parser!(Day)),
+        ])
+        .get_matches();
+
+    let months: u32 = matches
+        .get_one(MONTHS_ARG)
+        .copied()
+        .expect("default value should be set");
+
+    let between_result: &DayOfMonth = matches
+        .get_one(BETWEEN_ARG)
+        .expect("default value should be set");
+
+    let days: Vec<Day> = matches
+        .get_many(DAYS_ARG)
+        .expect("default value should be set")
+        .copied()
+        .collect();
+
+    let mut builder = MontheyBuilder::from_this_month();
+
+    for day in days.into_iter() {
+        builder = builder.check_day(day);
+    }
+
+    let result = builder
+        .between_date(*between_result)
+        .unwrap()
+        .for_months(months);
+
+    let display_names: HashMap<Day, &'static str> = [
+        // (Day::Thursday, "Rent Day"),
+        // (Day::Saturday, "Grocery shopping day"),
     ]
     .into_iter()
     .collect();
